@@ -1,10 +1,24 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import path from "path";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Enable CORS for all routes in production for Vercel deployment
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    next();
+  });
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -47,7 +61,9 @@ let server: any;
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    if (process.env.NODE_ENV !== 'production') {
+      throw err;
+    }
   });
 
   // Only run server in development mode or when not on Vercel
@@ -75,6 +91,11 @@ let server: any;
   } else {
     // In Vercel, we just need to serve static files
     serveStatic(app);
+
+    // Add a health check route for Vercel
+    app.get('/_health', (req, res) => {
+      res.status(200).send('OK');
+    });
   }
 })();
 
